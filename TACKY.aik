@@ -1,0 +1,65 @@
+;AIK Implementation
+;Define the registers.
+.const {r0  r1  r2  r3  r4  ra  rv  sp}
+;Define format for pre, jp8, and sys.
+.jpsimm .imm8 := .this:5 0:3 .imm8:8
+.alias .jpsimm 0b00001 pre 0b00011 jp8 0b00010 sys
+;Define format for cf8, ci8, jnz8, jz8
+.jandcimm $.r, .imm8 := .this:5 .r:3 .imm8:8
+.alias .jandcimm 0b00110 cf8 0b00111 ci8 0b00101 jnz8 0b00100 jz8
+;Define format for the rest of the instruction combinations.
+.other $.r0 , .other $.r1 := {
+    .this:5 .r0:3
+    .other:5 .r1:3
+}
+.alias .other {
+    0b01100 a2r 0b01101 r2a 0b01111 lf 0b01110 li 
+    0b01010 st 0b10111 cvt 0b01001 jr 0b01000 nothing 
+    0b11000 add 0b11001 sub 0b11011 mul 0b11010 div 
+    0b11110 and 0b11111 or 0b11101 xor 0b11100 not 
+    0b10100 sh 0b10101 slt
+}
+;Define the macros cf, ci, jnz, and jz
+.macros $.r , .imm16 := {
+    ;The first instruction is pre with the first half of .imm16
+    pre:5 0:3 (.imm16 >> 8):8
+    ;The second instruction is whatever is in the second 5 bits of .macros
+    ;combined with the second half of .imm16
+    .macros:5 .r:3 (.imm16):8
+}
+.alias .macros {
+    0b0000100110 cf 0b0000100111 ci 0b0000100101 jnz 0b0000100100 jz
+}
+cf $.r , .imm16 := {
+    ;The first instruction is pre with the first half of .imm16
+    pre:5 0:3 (.imm16 >> 8):8
+    ;The second instruction is a cf8 combined with the second half of .imm16
+    cf8:5 .r:3 (.imm16):8
+}
+ci $.r , .imm16 := {
+    ;The first instruction is pre with the first half of .imm16
+    pre:5 0:3 (.imm16 >> 8):8
+    ;The second instruction is a ci8 combined with the second half of .imm16
+    ci8:5 .r:3 (.imm16):8
+}
+jnz $.r , .imm16 := {
+    ;The first instruction is pre with the first half of .imm16
+    pre:5 0:3 (.imm16 >> 8):8
+    ;The second instruction is a jnz8 combined with the second half of .imm16
+    jnz8:5 .r:3 (.imm16):8
+}
+jz $.r , .imm16 := {
+    ;The first instruction is pre with the first half of .imm16
+    pre:5 0:3 (.imm16 >> 8):8
+    ;The second instruction is a jz8 combined with the second half of .imm16
+    jz8:5 .r:3 (.imm16):8
+}
+;Define jp macro
+jp .addr := {
+    ;First instruction is a pre with the first half of .addr
+    0:5 0:3 (.addr >> 8):8
+    ;Second instruction is a jp8 with the second half of .addr
+    0b00001:5 0:3 (.addr):8
+}
+.segment .text 16 0x10000 0 .VMEM
+.segment .data 16 0x10000 0 .VMEM

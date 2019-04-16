@@ -1,3 +1,4 @@
+`include "core.v"
 
 `define LINE [63:0]
 `define LINES [16383:0]
@@ -14,6 +15,7 @@ reg `LINE m `LINES;
 
 initial begin
   pend <= 0;
+  readmemh2(m);
   // put your memory initialization code here
 end
 
@@ -184,20 +186,19 @@ module L1_cache();
 
 endmodule
 
-module core(halt, reset, clk, ...);
-    output reg halt;
-    input reset, clk;
-
-    //Processor from last assignment goes here
-    
-endmodule
-
-module processor(halt, reset, clk);
+module processor(halt, reset, clk);L1
 
     reg `LINE rdata, wdata, addr;
     reg strobe, rnotw, mfc;
     
     slowmem64(mfc, rdata, addr, wdata, rnotw, strobe, clk);
+    
+    
+    
+    //caches for cores
+    //L1_cache c1_cache()
+    //L1_cache c2_cache()
+    
     //core c1(halt, reset, clk, ...);
     //core c2(halt, reset, clk, ...);
     
