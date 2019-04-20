@@ -182,22 +182,32 @@ assign ui = {1'b1, f `FFRAC, 16'b0} >> ((128+22) - f `FEXP);
 assign i = (tiny ? 0 : (big ? 32767 : (f `FSIGN ? (-ui) : ui)));
 endmodule
 
+`define LOCK_REG    [18:0]
+`define LOCK        [18]
+`define 
+
 module L1_cache();
 
 endmodule
 
-module processor(halt, reset, clk);L1
+module priority_decider(request_to_use, request0, request1):
+output [19:0] 
+
+endmodule
+module processor(halt, reset, clk);
 
     reg `LINE rdata, wdata, addr;
     reg strobe, rnotw, mfc;
+    reg [18:0] lock;
+    
     
     slowmem64(mfc, rdata, addr, wdata, rnotw, strobe, clk);
     
     
     
     //caches for cores
-    //L1_cache c1_cache()
-    //L1_cache c2_cache()
+    //L1_cache c1_cache();
+    //L1_cache c2_cache();
     
     //core c1(halt, reset, clk, ...);
     //core c2(halt, reset, clk, ...);
