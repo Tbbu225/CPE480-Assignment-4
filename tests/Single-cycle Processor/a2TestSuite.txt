@@ -1,0 +1,150 @@
+	.text
+	.origin 0x0000
+start: ci $0, 0x0366 ;add tests
+	ci $2, 0x000a
+	add $2, r2a $1
+	jz $0, t1
+	sys 0x0001 ;sys(1) = system.exit()
+t1: cf $1, 0xc118
+	r2a $0, add $2
+	jnz $1, t2
+	sys 0x0001
+t2: ci $0, 0x000a ;sub tests
+	sub $2, r2a $1
+	jz $0, t3
+	sys 0x0001
+t3: cf $1, 0xc110
+	r2a $0, sub $2
+	jnz $1, t4
+	sys 0x0001
+t4: ci $0, 0x000a ;mul tests
+	ci $2, 0x0000
+	mul $2, r2a $1
+	jz $0, t5
+	sys 0x0001
+t5: cf $1, 0x40a0
+	ci $2, 0x0002
+	r2a $0, mul $2
+	jnz $1, t6
+	sys 0x0001
+t6: ci $0, 0x0000 ;div tests
+	ci $2, 0x0005
+	div $2, r2a $1
+	jz $0, t7
+	sys 0x0001
+t7: cf $1, 0x4170
+	r2a $0, div $2
+	jnz $1, t8
+	sys 0x0001
+t8: ci $0, 0x001a ;bitwise AND tests
+	ci $2, 0x001a
+	and $2, r2a $1
+	sub $2, r2a $1
+	jz $0, t9
+	sys 0x0001
+t9: ci $1, 0x0019
+	ci $2, 0x001a
+	r2a $0, and $2
+	r2a $0, sub $2
+	jnz $1, t10
+	sys 0x0001
+t10: ci $0, 0x0005 ;bitwise OR tests
+	ci $2, 0x000a
+	ci $1, 0x000f
+	or $2, sub $0
+	jz $1, t11
+	sys 0x0001
+t11: ci $1, 0x0000
+	ci $2, 0x000f
+	r2a $0, or $2
+	jnz $1, t12
+	sys 0x0001
+t12: ci $2, 0xffff ;bitwise NOT tests
+	not $2, r2a $1
+	jz $0, t13
+	sys 0x0001
+t13: ci $2, 0x0000
+	r2a $0, not $2
+	jnz $1, t14
+	sys 0x0001
+t14: ci $0, 0x000a ;bitwise XOR tests
+	ci $2, 0x0005
+	ci $1, 0x000f
+	xor $2, sub $0
+	jz $1, t15
+	sys 0x0001
+t15: ci $1, 0x0000
+	ci $2, 0x000f
+	r2a $0, xor $2
+	jnz $1, t16
+	sys 0x0001
+t16: ci $0, 0x0000 ;a2r tests
+	ci $2, 0x000c
+	a2r $2, r2a $1
+	jz $2, t17
+	sys 0x0001
+t17:ci $1, 0x000c
+	ci $2, 0x0000
+	r2a $0, a2r $2
+	jnz $2, t18
+	sys 0x0001
+t18:ci $2, 0x0001 ;cvt tests
+	cf $3, 0x3f80
+	cvt $2, a2r $3
+	and $3, sub $0
+	jz $1, t19
+	sys 0x0001
+t19: cf $2, 0x3f80
+	ci $3, 0x0001
+	a2r $3, cvt $2
+	r2a $0, and $3
+	sub $1, r2a $1
+	jz $0, t20
+	sys 0x0001
+t20: jp t21 ;jp test
+	sys 0x0001
+t21: ci $2, t22 ;jr tests
+	jr $2, r2a $1
+	sys 0x0001
+t22:ci $2, t23
+	r2a $0, jr $2
+t23: ci $2, 0x0000 ;memory tests
+	ci $0, 0x0005
+	ci $1, 0x0002
+	ci $3, 0x0000
+	st $2, li $3
+	jnz $3, t24
+	sys 0x0001
+t24: cf $2, 0x0000
+	cf $3, 0x0000
+	ci $0, 0x0002
+	ci $1, 0x0005
+	r2a $0, st $2
+	lf $3, r2a $1
+	jnz $3, t25
+	sys 0x0001
+t25: ci $0, 0x0002 ;slt tests
+	ci $2, 0x0003
+	slt $2, r2a $1
+	jnz $0, t26
+	sys 0x0001
+t26: ci $1, 0x0003
+	ci $2, 0x0002
+	r2a $0, slt $2
+	jz $1, t27
+	sys 0x0001
+t27: ci $0, 0x0007 ;shift tests
+	ci $2, 0x0001
+	ci $1, 0x000e
+	sh $2, sub $0
+	jz $1, t28
+	sys 0x0001
+t28: ci $1, 0x0007
+	ci $2, 0xffff
+	ci $0, 0x0003
+	r2a $0, sh $2
+	sub $1, r2a $1
+	jz $0, t29
+	sys 0x0001
+t29: r2a $0, r2a $1 ;end of tests, padding before sys exit
+	sys 0x0000
