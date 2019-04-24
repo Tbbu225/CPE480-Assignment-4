@@ -14,6 +14,7 @@
 `define MEMSIZE     [65535:0]
 `define REGNUM      [2:0]
 `define OPcodeID    [4:0]
+`define CACHElinesize [63:0]
 
 // opcode values, also state numbers
 `define OPno        5'b00000
@@ -514,6 +515,9 @@ module tacky_core(halt, reset, clk);
 output reg halt;
 input reset;
 input clk;
+
+//L1 Cache
+reg `CACHElinesize cache `WORD;
 
 //stage 0 regs & memory
 reg `WORD pc, pc_inc, instruction;
