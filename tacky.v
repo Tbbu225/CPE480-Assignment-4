@@ -184,35 +184,145 @@ endmodule
 
 `define LOCK_REG    [18:0]
 `define LOCK        [18]
-`define 
+`define LOCK_NUM    [17]
+`define LOCK_RW     [16]
+`define LOCK_ADDR   [15:0]
 
-module L1_cache();
 
-endmodule
+`define CACHE_SHARE         [28:0]
+`define CACHE_SHARE_TAG     [9:0]
+`define CACHE_SHARE_SELECT  [11:10]
+`define CACHE_SHARE_DATA    [27:12]
+`define CACHE_SHARE_STROBE  [28]
 
-module priority_decider(request_to_use, request0, request1):
-output [19:0] 
-
-endmodule
-module processor(halt, reset, clk);
-
-    reg `LINE rdata, wdata, addr;
-    reg strobe, rnotw, mfc;
-    reg [18:0] lock;
+module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request_status, lock, share_in);
+    output `CACHE_SHARE share_out; 
+    output reg `LOCK_ADDR addr;
+    output reg `LINE wdata;
+    output pass, rnotw, strobe;
+    input mfc, request_status, lock;
+    input `LINE rdata;
+    input `CACHE_SHARE share_in;
     
+
+endmodule
+
+`define LOCK_VALUE      [17:0]
+`define CACHE_REQUEST   [18:0]
+`define PASS_FLAG       [18]
+`define CACHE_NUM       [17]
+`define CACHE_RW        [16]
+`define CACHE_ADDR      [15:0]
+`define PASS            1
+`define ACCEPT          0
+
+//logic for deciding order of cache reads/writes
+module priority_decider(request_to_use, pass, request0_status, request1_status, request0, request1, lock);
+    output reg `LOCK_VALUE request_to_use;
+    output reg pass, request0_status, request1_status;
+    input `CACHE_REQUEST request0, request1;
+    input lock;
+    
+    //logic:
+    //only consider the next choices when the lock is undone and ready for a next value
+    //if one cache passes, use the other cache unless it is also passing
+    //if both caches want to do something, then prioritize reads over writes
+    //if both caches want to do the same kind of action, let cache0 go first
+    always @(*) begin
+        if(!lock) begin
+            case({request0 `PASS_FLAG, request1 `PASS_FLAG})
+                2'b00: begin
+                    case({request0 `CACHE_RW, request1 `CACHE_RW})
+                        2'b01: begin
+                            request_to_use = request0 `LOCK_VALUE;
+                            pass = `ACCEPT;
+                            request0_status = `PASS;
+                            request1_status = `ACCEPT;
+                        end
+                        2'b10: begin
+                            request_to_use = request1 `LOCK_VALUE;
+                            pass = `ACCEPT;
+                            request0_status = `ACCEPT;
+                            request1_status = `PASS;
+                        end
+                        default: begin
+                            request_to_use = request0 `LOCK_VALUE;
+                            pass = `ACCEPT;
+                            request0_status = `ACCEPT;
+                            request1_status = `PASS;
+                        end
+                    endcase
+                end
+                2'b01: begin
+                    request_to_use = request0 `LOCK_VALUE;
+                    pass = `ACCEPT;
+                    request0_status = `ACCEPT;
+                    request1_status = `PASS;
+                end
+                2'b10: begin
+                    request_to_use = request1 `LOCK_VALUE;
+                    pass = `ACCEPT;
+                    request0_status = `PASS;
+                    request1_status = `ACCEPT;
+                end
+                2'b11: begin
+                    pass = `PASS;
+                    request0_status = `PASS;
+                    request1_status = `PASS;
+                end
+            endcase
+        end
+    end
+
+endmodule
+
+module processor(halt, reset, clk);
+    //lines for slowmem
+    reg `LINE rdata, wdata, addr;
+    reg strobe, rnotw, mfc, select, pass;
+    
+    //lock for controling reads/writes
+    reg `LOCK_REG lock;
+    
+    //lines for first L1 cache
+    reg `LINE cache0_rdata, cache0_wdata, cache0_addr;
+    reg cache0_pass, cache0_strobe, cache0_rnotw, cache0_mfc, cache0_status;
+
+    //lines for second L1 cache
+    reg `LINE cache1_rdata, cache1_wdata, cache1_addr;
+    reg cache1_pass, cache1_strobe, cache1_rnotw, cache1_mfc, cache1_status;
+    
+    //lines for sharing between caches
+    reg `CACHE_SHARE cache0_1, cache1_0;pass
     
     slowmem64(mfc, rdata, addr, wdata, rnotw, strobe, clk);
     
+    //locked when instruction is a read instruction and the mfc has not been set yet
+    assign lock `LOCK = !mfc && lock `LOCK_RW;
     
+    //logic for memory to use lock
+    always @(lock) begin
+        addr = lock `LOCK_ADDR;
+        rnotw = lock `LOCK_RW;
+        select = lock `LOCK_NUM;
+        wdata = (!select) ? cache0_wdata : cache1_wdata;
+        strobe = (!select) ? cache0_strobe : cache1_strobe;
+        if(!select) begin
+            cache0_rdata = rdata;
+        end
+        else begin
+            cache1_rdata = rdata;
+        end
+    end
     
     //caches for cores
-    //L1_cache c1_cache();
-    //L1_cache c2_cache();
+    L1_cache c0_cache(cache0_1, cache0_addr, cache0_wdata, cache0_pass, cache0_rnotw, cache0_strobe, cache0_status, cache0_rdata, lock `LOCK, cache1_0);
+    L1_cache c1_cache(cache1_0, cache1_addr, cache1_wdata, cache1_pass, cache1_rnotw, cache1_strobe, cache1_status, cache1_rdata, lock `LOCK, cache0_1);
+    
+    priority_decider decider(lock `LOCK_VALUE, pass, cache0_status, cache1_status, {cache0_pass, 1'b0, cache0_rnotw, cache0_addr}, {cache1_pass, 1'b1, cache1_rnotw, cache1_addr}, lock `LOCK);
     
     //core c1(halt, reset, clk, ...);
     //core c2(halt, reset, clk, ...);
-    
-    //L1 cache <-> DataMem routing
     
 endmodule
 
