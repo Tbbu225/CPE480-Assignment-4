@@ -189,11 +189,10 @@ endmodule
 `define LOCK_ADDR   [15:0]
 
 
-`define CACHE_SHARE         [28:0]
-`define CACHE_SHARE_TAG     [9:0]
-`define CACHE_SHARE_SELECT  [11:10]
-`define CACHE_SHARE_DATA    [27:12]
-`define CACHE_SHARE_STROBE  [28]
+`define CACHE_SHARE         [32:0]
+`define CACHE_SHARE_ADDRESS [15:0]
+`define CACHE_SHARE_DATA    [31:16]
+`define CACHE_SHARE_STROBE  [32]
 
 module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request_status, lock, share_in);
     output `CACHE_SHARE share_out; 
@@ -306,7 +305,7 @@ module processor(halt, reset, clk);
         rnotw = lock `LOCK_RW;
         select = lock `LOCK_NUM;
         wdata = (!select) ? cache0_wdata : cache1_wdata;
-        strobe = (!select) ? cache0_strobe : cache1_strobe;
+        strobe = ((!select) ? cache0_strobe : cache1_strobe) && pass;
         if(!select) begin
             cache0_rdata = rdata;
         end
