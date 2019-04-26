@@ -188,13 +188,15 @@ endmodule
 `define LOCK_RW     [16]
 `define LOCK_ADDR   [15:0]
 
+`define CACHE_LINE  [75:0]
+`define CACHE_SIZE  [15:0]
 
 `define CACHE_SHARE         [32:0]
 `define CACHE_SHARE_ADDRESS [15:0]
 `define CACHE_SHARE_DATA    [31:16]
 `define CACHE_SHARE_STROBE  [32]
 
-module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request_status, lock, share_in);
+module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request_status, lock, share_in, clk);
     output `CACHE_SHARE share_out; 
     output reg `LOCK_ADDR addr;
     output reg `LINE wdata;
@@ -202,7 +204,84 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
     input mfc, request_status, lock;
     input `LINE rdata;
     input `CACHE_SHARE share_in;
+
+	reg `CACHE_LINE cache `CACHE_SIZE;
+
+	initial begin
+		strobe <= 0;
+		pass <= 1;
+		rnotw <= 1;
+	end
     
+	//Waiting on how the connections from the core will be set up
+	always @(posedge clk) begin
+		if (pass) begin
+		//Get new data from core
+			//if (instruction is read) begin
+				//if (data is not in cache) begin
+					//pass <= 0;
+					//rnotw <= 1;
+					//request rdata from decider
+					//tell core to wait
+					//end
+				//else begin
+					//send data from cache to core
+				//end
+			//end
+			//else if (instruction is a write) begin
+				//pass <= 0;
+				//rnotw <= 0;
+				//if (!lock) begin
+					//strobe <= 1;
+					//send wdata to decider
+					//send share_out to other cache
+				//end
+				//else
+					//hold data, tell core to wait
+			//end
+		end
+		else begin //!pass
+			if (rnotw) begin
+				if (!request_status) begin //not waiting on decider
+					if (mfc) begin
+						pass <= 1;
+						//make new cache line using rdata
+						//replace a cache line with new one
+						//send data from cache to core
+					end
+					else begin
+						//tell core to wait 
+					end
+				end
+				else begin //waiting on decider
+					//tell core to wait
+					//resend read request?
+				end
+			end
+			else begin
+				if (!lock) begin //wdata hasn't been sent yet
+					strobe <= 1;
+					//send wdata to decider
+					//send share_out to other cache
+				end
+				else begin
+					strobe <= 0;
+					if (!request_status) begin //decider sent wdata to slowmem
+						pass <= 1;
+						//tell core to resume
+					//end
+					//else begin
+						//do nothing?
+					//end
+				end
+			end
+		end
+
+		if (share_in`CACHE_SHARE_STROBE) begin
+			//if (share_in`CACHE_SHARE_ADDRESS in cache)
+				//Update cache entry
+		end
+	end 
 
 endmodule
 
@@ -315,8 +394,8 @@ module processor(halt, reset, clk);
     end
     
     //caches for cores
-    L1_cache c0_cache(cache0_1, cache0_addr, cache0_wdata, cache0_pass, cache0_rnotw, cache0_strobe, cache0_status, cache0_rdata, lock `LOCK, cache1_0);
-    L1_cache c1_cache(cache1_0, cache1_addr, cache1_wdata, cache1_pass, cache1_rnotw, cache1_strobe, cache1_status, cache1_rdata, lock `LOCK, cache0_1);
+    L1_cache c0_cache(cache0_1, cache0_addr, cache0_wdata, cache0_pass, cache0_rnotw, cache0_strobe, cache0_status, cache0_rdata, lock `LOCK, cache1_0, clk);
+    L1_cache c1_cache(cache1_0, cache1_addr, cache1_wdata, cache1_pass, cache1_rnotw, cache1_strobe, cache1_status, cache1_rdata, lock `LOCK, cache0_1, clk);
     
     priority_decider decider(lock `LOCK_VALUE, pass, cache0_status, cache1_status, {cache0_pass, 1'b0, cache0_rnotw, cache0_addr}, {cache1_pass, 1'b1, cache1_rnotw, cache1_addr}, lock `LOCK);
     
