@@ -188,8 +188,9 @@ endmodule
 `define LOCK_RW     [16]
 `define LOCK_ADDR   [15:0]
 
-`define CACHE_LINE  [74:0]
+`define CACHE_LINE  [75:0]
 `define CACHE_SIZE  [15:0]
+`define CACHE_DIRTY [75]
 `define CACHE_VALID [74]
 `define CACHE_DATA  [63:0]
 `define CACHE_TAG   [73:64]
