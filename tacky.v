@@ -188,8 +188,11 @@ endmodule
 `define LOCK_RW     [16]
 `define LOCK_ADDR   [15:0]
 
-`define CACHE_LINE  [75:0]
+`define CACHE_LINE  [74:0]
 `define CACHE_SIZE  [15:0]
+`define CACHE_VALID [74]
+`define CACHE_DATA  [63:0]
+`define CACHE_TAG   [73:64]
 
 `define CACHE_SHARE         [32:0]
 `define CACHE_SHARE_ADDRESS [15:0]
@@ -371,7 +374,7 @@ module processor(halt, reset, clk);
     reg cache1_pass, cache1_strobe, cache1_rnotw, cache1_mfc, cache1_status;
     
     //lines for sharing between caches
-    reg `CACHE_SHARE cache0_1, cache1_0;pass
+    reg `CACHE_SHARE cache0_1, cache1_0;
     
     slowmem64(mfc, rdata, addr, wdata, rnotw, strobe, clk);
     
@@ -384,7 +387,7 @@ module processor(halt, reset, clk);
         rnotw = lock `LOCK_RW;
         select = lock `LOCK_NUM;
         wdata = (!select) ? cache0_wdata : cache1_wdata;
-        strobe = ((!select) ? cache0_strobe : cache1_strobe) && pass;
+        strobe = ((!select) ? cache0_strobe : cache1_strobe) && !pass;
         if(!select) begin
             cache0_rdata = rdata;
         end
