@@ -1291,11 +1291,13 @@ module processor(halt, reset, disable_cache, clk);
     reg `LOCK_REG lock;
     
     //lines for first L1 cache
-    reg `LINE cache0_rdata, cache0_wdata, cache0_addr;
+    reg `LINE cache0_rdata, cache0_wdata; 
+    reg `WORD cache0_addr;
     reg cache0_pass, cache0_strobe, cache0_rnotw, cache0_mfc, cache0_status;
 
     //lines for second L1 cache
-    reg `LINE cache1_rdata, cache1_wdata, cache1_addr;
+    reg `LINE cache1_rdata, cache1_wdata; 
+    reg `WORD cache1_addr;
     reg cache1_pass, cache1_strobe, cache1_rnotw, cache1_mfc, cache1_status;
     
     //lines for sharing between caches
