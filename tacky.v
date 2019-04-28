@@ -915,6 +915,7 @@ endmodule
 
 
 
+`define LINEADDR [13:0]
 `define LINE [63:0]
 `define LINES [16383:0]
 `define MEMDELAY 4
@@ -922,15 +923,15 @@ endmodule
 module slowmem64(mfc, rdata, addr, wdata, rnotw, strobe, clk);
 output reg mfc;
 output reg `LINE rdata;
-input `LINE addr, wdata;
+input `LINEADDR addr;
+input `LINE wdata;
 input rnotw, strobe, clk;
 reg [7:0] pend;
-reg `LINE raddr;
+reg `LINEADDR raddr;
 reg `LINE m `LINES;
 
 initial begin
   pend <= 0;
-  $readmemh1(m);
   // put your memory initialization code here
 end
 
@@ -968,6 +969,7 @@ always @(posedge clk) begin
   end
 end
 endmodule
+
 
 
 // Floating point Verilog modules for CPE480
@@ -1273,13 +1275,16 @@ module priority_decider(request_to_use, pass, request0_status, request1_status, 
 
 endmodule
 
+`define BLOCKADDR [15:2] //4-byte blocks & 16 bit addresses -> 14 bit blocks
+
 module processor(halt, reset, disable_cache, clk);
 
     input reset, use_cache, clk;
     output halt;
     
     //lines for slowmem
-    reg `LINE rdata, wdata, addr;
+    reg `LINE rdata, wdata, 
+    reg `WORD addr;
     reg strobe, rnotw, mfc, select, pass;
     
     //lock for controling reads/writes
@@ -1306,7 +1311,7 @@ module processor(halt, reset, disable_cache, clk);
     
     assign halt = halt1 && halt2;
     
-    slowmem64(mfc, rdata, addr, wdata, rnotw, strobe, clk);
+    slowmem64(mfc, rdata, addr `BLOCKADDR, wdata, rnotw, strobe, clk);
     
     //locked when instruction is a read instruction and the mfc has not been set yet
     assign lock `LOCK = !mfc && lock `LOCK_RW;
