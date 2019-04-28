@@ -51,9 +51,11 @@
 //Module stuff
 `define ALU     	5'b1xxxx
 
-//Accumulator values
+//Accumulator and reg values
 `define Acc0        [0]
 `define Acc1        [1]
+`define NUM_sp      7
+`define NUMREG      8
 
 //Type values
 `define Int         1'b0
@@ -147,7 +149,7 @@ module frecip(r, a);
 output wire `FLOAT r;
 input wire `FLOAT a;
 reg [6:0] look[127:0];
-initial $readmemh3(look);
+initial $readmemh2(look);
 assign r `FSIGN = a `FSIGN;
 assign r `FEXP = 253 + (!(a `FFRAC)) - a `FEXP;
 assign r `FFRAC = look[a `FFRAC];
@@ -510,11 +512,15 @@ module ALU1(outVal, out1, out2, oimm, oinst, inVal, rin1, rin2, iimm, iinst, ive
 	end
 endmodule
 
-module tacky_core(halt, reset, clk);
+module tacky_core(ins_to_mem, acc0_mem_val, acc1_mem_val, r1_mem_val, r2_mem_val, halt, reset, mem_stall, mem_val1, mem_val2, clk);
+
+parameter PC_start = 0;
+parameter sp_start = 16'hffff;
 
 output reg halt;
-input reset;
-input clk;
+output reg `WORD ins_to_mem, acc0_mem_val, acc1_mem_val, r1_mem_val, r2_mem_val;
+input reset, clk, mem_stall;
+input `WORD mem_val1, mem_val2; 
 
 //L1 Cache
 reg `CACHElinesize cache `WORD;
@@ -530,7 +536,7 @@ reg `TYPEDREG acc0_val, acc1_val, r1_val, r2_val, imm_to_ALUMEM;
 reg `WORD ins_to_ALUMEM;
 
 //stage 2 regs & memory
-reg `WORD data_mem `MEMSIZE;
+//reg `WORD data_mem `MEMSIZE;
 reg `WORD ins_to_ALU2;
 reg `TYPEDREG data1_to_ALU2, data2_to_ALU2, imm_to_ALU2;
 reg `TYPEDREG r0_to_ALU2, r1_to_ALU2, r2_to_ALU2, r3_to_ALU2;
@@ -608,11 +614,18 @@ reg [2:0] NOPs3;
 reg [2:0] NOPs4;
 reg [2:0] NOPs, NOP_timer;
 
+integer i;
 always@(posedge reset) begin
-    $readmemh0(regfile);
-    $readmemh1(instruction_mem);
-    $readmemh2(data_mem);
-    pc <= 0;
+    for (i = 0; i < `REGNUM; i++) begin
+        if(i == NUM_sp) begin
+            regfile[i] = sp_start;
+        end
+        else begin
+            regfile[i] = 0;
+        end
+    end
+    $readmemh0(instruction_mem);
+    pc <= PC_start;
     pc_inc <= 1;
     pre <= 0;
     halt <= 0;
@@ -624,7 +637,7 @@ end
 
 //stage 0: instruction fetch
 always@(posedge clk) begin
-    if(NOP_timer == 0  && !IF_SysFlag) begin
+    if(NOP_timer == 0  && !IF_SysFlag && !mem_stall) begin
         pc <= (jump_flag) ? pc_next : pc_inc;
     end
     instruction <= instruction_mem[pc];
@@ -747,40 +760,68 @@ assign alu0_0iimm = imm_to_ALUMEM;
 assign alu0_1iimm = imm_to_ALUMEM;
 
 always@(posedge clk) begin
-	ins_to_ALU2 <= alu0_0oinst;
-	imm_to_ALU2 <= alu0_0oimm;
+    ins_to_ALU2 <= alu0_0oinst;
+ 	imm_to_ALU2 <= alu0_0oimm;
 	r0_to_ALU2 <= alu0_0out1;
-	r1_to_ALU2 <= alu0_0out2;
-	r2_to_ALU2 <= alu0_1out1;
-	r3_to_ALU2 <= alu0_1out2;
-	
-	case (alu0_0iinst`OPcode1)
-		`OPlf: begin
-			data1_to_ALU2 <= data_mem[alu0_0out1];
-		end	
-		`OPli: begin
-			data1_to_ALU2 <= data_mem[alu0_0out1];
-		end	
-		`OPst: begin
-			data_mem[alu0_0out2] <= alu0_0out1;
-			data1_to_ALU2 <= 17'b0;
-		end
-		default: data1_to_ALU2 <= alu0_0outVal;
-	endcase
-	
-	case (alu0_0iinst`OPcode2)
-		`OPlf: begin
-			data2_to_ALU2 <= data_mem[alu0_1out1];
-		end	
-		`OPli: begin
-			data2_to_ALU2 <= data_mem[alu0_1out1];
-		end	
-		`OPst: begin
-			data_mem[alu0_1out2] <= alu0_1out1;
-			data1_to_ALU2 <= 17'b0;
-		end
-		default: data2_to_ALU2 <= alu0_1outVal;
-	endcase
+ 	r1_to_ALU2 <= alu0_0out2;
+ 	r2_to_ALU2 <= alu0_1out1;
+ 	r3_to_ALU2 <= alu0_1out2;
+    
+    ins_to_mem <= ins_to_ALUMEM;
+    acc0_mem_val <= acc0_val;
+    acc1_mem_val <= acc1_val;
+    r1_mem_val <= r1_val;
+    r2_mem_val <= r2_val;
+    
+    case(ins_to_ALUMEM `Opcode1)
+        `OPlf: begin
+            data1_to_ALU2 <= {`Float , mem_val1};
+        end
+        `OPli: begin
+            data1_to_ALU2 <= {`Int, mem_val1};
+        end
+        default data1_to_ALU2 <= 0;
+    endcase
+
+    if(ins_to_ALUMEM `Opcode1 >= `OPjr) begin
+        case(ins_to_ALUMEM `Opcode1)
+            `OPlf: begin
+                data2_to_ALU2 <= {`Float , mem_val2};
+            end
+            `OPli: begin
+                data2_to_ALU2 <= {`Int, mem_val2};
+            end
+            default data2_to_ALU2 <= 0;
+        endcase
+    end
+// 	
+// 	case (alu0_0iinst`OPcode1)
+// 		`OPlf: begin
+// 			data1_to_ALU2 <= data_mem[alu0_0out1];
+// 		end	
+// 		`OPli: begin
+// 			data1_to_ALU2 <= data_mem[alu0_0out1];
+// 		end	
+// 		`OPst: begin
+// 			data_mem[alu0_0out2] <= alu0_0out1;
+// 			data1_to_ALU2 <= 17'b0;
+// 		end
+// 		default: data1_to_ALU2 <= alu0_0outVal;
+// 	endcase
+// 	
+// 	case (alu0_0iinst`OPcode2)
+// 		`OPlf: begin
+// 			data2_to_ALU2 <= data_mem[alu0_1out1];
+// 		end	
+// 		`OPli: begin
+// 			data2_to_ALU2 <= data_mem[alu0_1out1];
+// 		end	
+// 		`OPst: begin
+// 			data_mem[alu0_1out2] <= alu0_1out1;
+// 			data1_to_ALU2 <= 17'b0;
+// 		end
+// 		default: data2_to_ALU2 <= alu0_1outVal;
+// 	endcase
 end
 
 //stage 3: ALU2
