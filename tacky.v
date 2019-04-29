@@ -1,5 +1,3 @@
-//this needs to be modifieddata_mem
-
 // basic sizes of things
 `define WORD        [15:0]
 `define HALFWORD    [7:0]
@@ -736,7 +734,7 @@ always@(posedge clk) begin
         ins_to_ALUMEM <= {`OPno, 3'b000, `OPno, 3'b001 };
         NOP_timer <= NOP_timer - 1; 
     end
-    else begin
+    else if (!mem_stall) begin
         if(instruction `OPcode1 == `OPpre) pre <= instruction `IMM8;
         if(instruction `OPcode1 == `OPcf8) imm_to_ALUMEM <= {`Float, pre, instruction `IMM8};
         if(instruction `OPcode1 == `OPci8 || (instruction `OPcode1 >= `OPjp8 && instruction `OPcode1 <= `OPjnz8) ) imm_to_ALUMEM <= {`Int, pre, instruction `IMM8};
