@@ -1449,7 +1449,7 @@ module processor(halt, reset, disable_cache, clk);
     //lines for core to L1 cache
     reg `WORD instruction_c1, acc0_val_c1, acc1_val_c1, r1_val_c1, r2_val_c1, mem_val1_c1, mem_val2_c1;
     reg `WORD instruction_c2, acc0_val_c2, acc1_val_c2, r1_val_c2, r2_val_c2, mem_val1_c2, mem_val2_c2;
-    reg cache_miss_flag_c1, cache_miss_flag_c2;
+    reg cache_stall_flag_c1, cache_stall_flag_c2;
     
     //lines for halt
     reg halt1, halt2;
@@ -1483,8 +1483,8 @@ module processor(halt, reset, disable_cache, clk);
     priority_decider decider(lock `LOCK_VALUE, pass, cache0_status, cache1_status, {cache0_pass, 1'b0, cache0_rnotw, cache0_addr}, {cache1_pass, 1'b1, cache1_rnotw, cache1_addr}, lock `LOCK);
     
     //module tacky_core(ins_to_mem, acc0_mem_val, acc1_mem_val, r1_mem_val, r2_mem_val, halt, reset, mem_stall, mem_val1, mem_val2, clk);
-    tacky_core c1(instruction_c1, acc0_val_c1, acc1_val_c1, r1_val_c1, r2_val_c1, halt1, reset, cache_miss_flag_c1, mem_val1_c1, mem_val2_c1, clk);
-    tacky_core #(PC_start = 16'h8000, sp_start = 16'hbfff) c2(instruction_c2, acc0_val_c2, acc1_val_c2, r1_val_c2, r2_val_c2, halt2, reset, cache_miss_flag_c2, mem_val1_c2, mem_val2_c2, clk);
+    tacky_core c1(instruction_c1, acc0_val_c1, acc1_val_c1, r1_val_c1, r2_val_c1, halt1, reset, cache_stall_flag_c1, mem_val1_c1, mem_val2_c1, clk);
+    tacky_core #(PC_start = 16'h8000, sp_start = 16'hbfff) c2(instruction_c2, acc0_val_c2, acc1_val_c2, r1_val_c2, r2_val_c2, halt2, reset, cache_stall_flag_c2, mem_val1_c2, mem_val2_c2, clk);
     
 endmodule
 
