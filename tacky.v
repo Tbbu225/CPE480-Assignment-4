@@ -1143,57 +1143,156 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 	end
     
 	always @(posedge clk) begin
-		if (!disable) begin
-			//First instruction
-			if (pass) begin
-				ins1pass <= 0;
-				if (ins`OPcode1 == `OPli || ins`OPcode1 == `OPlf) begin
-					for (i = 0; i < 16; i=i+1) begin
-						if (acc0 == cache[i]`CACHE_TAG)	begin 
-							rout1 <= cache[i]`CACHE_DATA;
-							incache <= 1;
-						end
+		//First instruction
+		if (pass) begin
+			ins1pass <= 0;
+			if (ins`OPcode1 == `OPli || ins`OPcode1 == `OPlf) begin
+				for (i = 0; i < 16; i=i+1) begin
+					if (acc0 == cache[i]`CACHE_TAG && !disable)	begin 
+						rout1 <= cache[i]`CACHE_DATA;
+						incache <= 1;
 					end
-					if (!incache) begin
-						pass <= 0;
-						rnotw <= 1;
-						addr <= acc0; 
-						stall <= 1;
-					end
-					incache <= 0;
 				end
-				else if (ins`OPcode1 == `OPst) begin
+				if (!incache || disable) begin
 					pass <= 0;
-					rnotw <= 0;
+					rnotw <= 1;
+					addr <= acc0; 
 					stall <= 1;
-					if (!lock) begin
-						strobe <= 1;
-						addr <= r1; 
-						wdata <= acc0; 
-						//send share_out to other cache
+				end
+				incache <= 0;
+			end
+			else if (ins`OPcode1 == `OPst) begin
+				pass <= 0;
+				rnotw <= 0;
+				stall <= 1;
+				if (!lock) begin
+					strobe <= 1;
+					addr <= r1; 
+					wdata <= acc0; 
+					//send share_out to other cache
+					if (!disable) begin
 						share_out`CACHE_SHARE_ADDRESS <= addr;
 						share_out`CACHE_SHARE_DATA <= acc0;
 						share_out`STROBE <= 1;
 					end
 				end
-				else
-					ins1pass <= 1;
 			end
-			else begin //!pass
-				if (rnotw) begin
-					if (!request_status) begin //not waiting on decider
-						if (mfc) begin
-							pass <= 1;
-							ins1pass <= 1;
-							stall <= 0;
+			else
+				ins1pass <= 1;
+		end
+		else begin //!pass
+			if (rnotw) begin
+				if (!request_status) begin //not waiting on decider
+					if (mfc) begin
+						pass <= 1;
+						ins1pass <= 1;
+						stall <= 0;
+						if (!disable) begin
 							//make new cache line using rdata
 							newcacheline`CACHE_VALID <= 1;
 							newcacheline`CACHE_TAG <= addr;
 							newcacheline`CACHE_DATA <= rdata;
 							//replace a cache line with new one
 							cache[oldestline] <= newcacheline;
+						end
+						//send data from cache to core
+						rout1 <= rdata;
+						//update oldestline
+						if (oldestline != 15)
+							oldestline <= oldestline + 1;
+						else
+							oldestline <= 0;
+					end
+					else
+						stall <= 1;
+				end
+				else begin //waiting on decider
+					stall <= 1;
+					//resend read request?
+				end
+			end
+			else begin
+				if (!strobe) begin //wdata hasn't been sent yet
+					if (!lock) begin
+						//send wdata to decider
+						strobe <= 1;
+						addr <= r1; 
+						wdata <= acc0; 
+						//send share_out to other cache
+						if (!disable begin)
+							share_out`CACHE_SHARE_ADDRESS <= addr;
+							share_out`CACHE_SHARE_DATA <= acc0;
+							share_out`STROBE <= 1;
+						end
+					end
+				end
+				else begin //wdata has been sent, waiting on status from decider
+					if (!request_status) begin
+						strobe <= 0;
+						pass <= 1;
+						ins1pass <= 1;
+						stall <= 0;
+					end
+					//else begin
+						//do nothing?
+					//end
+				end
+			end
+		end
+
+		//Second instruction
+		//If the cache is doing anything from the first instruction, then it should not try
+		// to do anything with the second instruction
+		if (ins1pass) begin
+			if (pass) begin
+				if (ins`OPcode2 == `OPli || ins`OPcode2 == `OPlf) begin
+					for (i = 0; i < 16; i=i+1) begin
+						if (acc1 == cache[i]`CACHE_TAG && !disable)	begin 
+							rout2 <= cache[i]`CACHE_DATA;
+							incache <= 1;
+						end
+					end
+					if (!incache || disable) begin
+						pass <= 0;
+						rnotw <= 1;
+						addr <= acc1; //not sure
+						stall <= 1;
+					end
+					incache <= 0;
+				end
+				else if (ins`OPcode2 == `OPst) begin
+					pass <= 0;
+					rnotw <= 0;
+					stall <= 1;
+					if (!lock) begin
+						strobe <= 1;
+						addr <= r2; 
+						wdata <= acc1; 
+						//send share_out to other cache
+						if (!disable) begin
+							share_out`CACHE_SHARE_ADDRESS <= addr;
+							share_out`CACHE_SHARE_DATA <= acc1;
+							share_out`STROBE <= 1;
+						end
+					end
+				end
+			end
+			else begin //!pass
+				if (rnotw) begin
+					if (!request_status) begin //not waiting on decider
+						if (mfc) begin
+							pass <= 1;
+							stall <= 0;
+							if (!disable) begin
+								//make new cache line using rdata
+								newcacheline`CACHE_VALID <= 1;
+								newcacheline`CACHE_TAG <= addr;
+								newcacheline`CACHE_DATA <= rdata;
+								//replace a cache line with new one
+								cache[oldestline] <= newcacheline;
+							end
 							//send data from cache to core
-							rout1 <= rdata;
+							rout2 <= rdata;
 							//update oldestline
 							if (oldestline != 15)
 								oldestline <= oldestline + 1;
@@ -1213,19 +1312,20 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 						if (!lock) begin
 							//send wdata to decider
 							strobe <= 1;
-							addr <= r1; 
-							wdata <= acc0; 
+							addr <= r2; 
+							wdata <= acc1; 
 							//send share_out to other cache
-							share_out`CACHE_SHARE_ADDRESS <= addr;
-							share_out`CACHE_SHARE_DATA <= acc0;
-							share_out`STROBE <= 1;
+							if (!disable) begin
+								share_out`CACHE_SHARE_ADDRESS <= addr;
+								share_out`CACHE_SHARE_DATA <= acc1;
+								share_out`STROBE <= 1;
+							end
 						end
 					end
 					else begin //wdata has been sent, waiting on status from decider
 						if (!request_status) begin
 							strobe <= 0;
 							pass <= 1;
-							ins1pass <= 1;
 							stall <= 0;
 						end
 						//else begin
@@ -1234,109 +1334,16 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 					end
 				end
 			end
-
-			//Second instruction
-			//If the cache is doing anything from the first instruction, then it should not try
-			// to do anything with the second instruction
-			if (ins1pass) begin
-				if (pass) begin
-					if (ins`OPcode2 == `OPli || ins`OPcode2 == `OPlf) begin
-						for (i = 0; i < 16; i=i+1) begin
-							if (acc1 == cache[i]`CACHE_TAG)	begin 
-								rout2 <= cache[i]`CACHE_DATA;
-								incache <= 1;
-							end
-						end
-						if (!incache) begin
-							pass <= 0;
-							rnotw <= 1;
-							addr <= acc1; //not sure
-							stall <= 1;
-						end
-						incache <= 0;
-					end
-					else if (ins`OPcode2 == `OPst) begin
-						pass <= 0;
-						rnotw <= 0;
-						stall <= 1;
-						if (!lock) begin
-							strobe <= 1;
-							addr <= r2; 
-							wdata <= acc1; 
-							//send share_out to other cache
-							share_out`CACHE_SHARE_ADDRESS <= addr;
-							share_out`CACHE_SHARE_DATA <= acc1;
-							share_out`STROBE <= 1;
-						end
-					end
-				end
-				else begin //!pass
-					if (rnotw) begin
-						if (!request_status) begin //not waiting on decider
-							if (mfc) begin
-								pass <= 1;
-								stall <= 0;
-								//make new cache line using rdata
-								newcacheline`CACHE_VALID <= 1;
-								newcacheline`CACHE_TAG <= addr;
-								newcacheline`CACHE_DATA <= rdata;
-								//replace a cache line with new one
-								cache[oldestline] <= newcacheline;
-								//send data from cache to core
-								rout2 <= rdata;
-								//update oldestline
-								if (oldestline != 15)
-									oldestline <= oldestline + 1;
-								else
-									oldestline <= 0;
-							end
-							else
-								stall <= 1;
-						end
-						else begin //waiting on decider
-							stall <= 1;
-							//resend read request?
-						end
-					end
-					else begin
-						if (!strobe) begin //wdata hasn't been sent yet
-							if (!lock) begin
-								//send wdata to decider
-								strobe <= 1;
-								addr <= r2; 
-								wdata <= acc1; 
-								//send share_out to other cache
-								share_out`CACHE_SHARE_ADDRESS <= addr;
-								share_out`CACHE_SHARE_DATA <= acc1;
-								share_out`STROBE <= 1;
-							end
-						end
-						else begin //wdata has been sent, waiting on status from decider
-							if (!request_status) begin
-								strobe <= 0;
-								pass <= 1;
-								stall <= 0;
-							end
-							//else begin
-								//do nothing?
-							//end
-						end
-					end
-				end
-			end
-
-			if (share_in`CACHE_SHARE_STROBE) begin
-				for (i = 0; i < 16; i = i+1) begin
-					if (share_in`CACHE_SHARE_ADDRESS == cache[i]`CACHE_TAG) begin
-						newcacheline`CACHE_VALID <= 1;
-						newcacheline`CACHE_TAG <= share_in`CACHE_SHARE_ADDRESS;
-						newcacheline`CACHE_DATA <= share_in`CACHE_SHARE_DATA;
-					end
-				end
-			end
 		end
-		//What to do when cache is disabled?
-		else begin
+
+		if (share_in`CACHE_SHARE_STROBE) begin
+			for (i = 0; i < 16; i = i+1) begin
+				if (share_in`CACHE_SHARE_ADDRESS == cache[i]`CACHE_TAG) begin
+					newcacheline`CACHE_VALID <= 1;
+					newcacheline`CACHE_TAG <= share_in`CACHE_SHARE_ADDRESS;
+					newcacheline`CACHE_DATA <= share_in`CACHE_SHARE_DATA;
+				end
+			end
 		end
 	end 
 
