@@ -1380,5 +1380,8 @@ initial begin
   end
   $finish;
 end
+initial begin
+    #100000 $finish;
+end
 endmodule
 
