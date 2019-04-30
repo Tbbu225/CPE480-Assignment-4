@@ -612,7 +612,7 @@ reg [2:0] NOPs, NOP_timer;
 integer i;
 always@(posedge reset) begin
     for (i = 0; i < `NUMREG; i = i + 1) begin
-        if(i == NUM_sp) begin
+        if(i == `NUM_sp) begin
             regfile[i] = sp_start;
         end
         else begin
@@ -986,10 +986,10 @@ endmodule
 `define CACHE_SHARE_STROBE  [32]
 
 module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request_status, lock, share_in, ins, acc0, acc1, r1, r2, rout1, rout2, stall, disable_cache, clk);
-    output `CACHE_SHARE share_out; 
+    output reg `CACHE_SHARE share_out;
     output reg `LOCK_ADDR addr;
     output reg `LINE wdata, rout1, rout2;
-    output pass, rnotw, strobe, stall;
+    output reg pass, rnotw, strobe, stall;
     input mfc, request_status, lock, disable_cache, clk;
     input `LINE rdata;
     input `CACHE_SHARE share_in;
@@ -1002,6 +1002,8 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 	reg incache;
 	reg ins1pass;
 
+	integer i;
+	
 	initial begin
 		strobe <= 0;
 		pass <= 1;
@@ -1296,33 +1298,35 @@ module processor(halt, reset, disable_cache, clk);
     output halt;
     
     //lines for slowmem
-    reg `LINE rdata, wdata;
-    reg `WORD addr;
-    reg strobe, rnotw, mfc, select, pass;
+    wire `LINE rdata, wdata;
+    wire `WORD addr;
+    wire strobe, rnotw, mfc, select, pass;
     
     //lock for controling reads/writes
-    reg `LOCK_REG lock;
+    wire `LOCK_REG lock;
     
     //lines for first L1 cache
-    reg `LINE cache0_rdata, cache0_wdata; 
-    reg `WORD cache0_addr;
-    reg cache0_pass, cache0_strobe, cache0_rnotw, cache0_mfc, cache0_status;
+    reg `LINE cache0_rdata;
+    wire `LINE cache0_wdata; 
+    wire `WORD cache0_addr;
+    wire cache0_pass, cache0_strobe, cache0_rnotw, cache0_mfc, cache0_status;
 
     //lines for second L1 cache
-    reg `LINE cache1_rdata, cache1_wdata; 
-    reg `WORD cache1_addr;
-    reg cache1_pass, cache1_strobe, cache1_rnotw, cache1_mfc, cache1_status;
+    reg `LINE cache1_rdata;
+    wire `LINE cache1_wdata; 
+    wire `WORD cache1_addr;
+    wire cache1_pass, cache1_strobe, cache1_rnotw, cache1_mfc, cache1_status;
     
     //lines for sharing between caches
-    reg `CACHE_SHARE cache0_1, cache1_0;
+    wire `CACHE_SHARE cache0_1, cache1_0;
     
     //lines for core to L1 cache
-    reg `WORD instruction_c1, acc0_val_c1, acc1_val_c1, r1_val_c1, r2_val_c1, mem_val1_c1, mem_val2_c1;
-    reg `WORD instruction_c2, acc0_val_c2, acc1_val_c2, r1_val_c2, r2_val_c2, mem_val1_c2, mem_val2_c2;
-    reg cache_stall_flag_c1, cache_stall_flag_c2;
+    wire `WORD instruction_c1, acc0_val_c1, acc1_val_c1, r1_val_c1, r2_val_c1, mem_val1_c1, mem_val2_c1;
+    wire `WORD instruction_c2, acc0_val_c2, acc1_val_c2, r1_val_c2, r2_val_c2, mem_val1_c2, mem_val2_c2;
+    wire cache_stall_flag_c1, cache_stall_flag_c2;
     
     //lines for halt
-    reg halt1, halt2;
+    wire halt1, halt2;
     
     assign halt = halt1 && halt2;
     
@@ -1332,12 +1336,12 @@ module processor(halt, reset, disable_cache, clk);
     assign lock `LOCK = !mfc && lock `LOCK_RW;
     
     //logic for memory to use lock
-    always @(lock) begin
-        addr = lock `LOCK_ADDR;
-        rnotw = lock `LOCK_RW;
-        select = lock `LOCK_NUM;
-        wdata = (!select) ? cache0_wdata : cache1_wdata;
-        strobe = ((!select) ? cache0_strobe : cache1_strobe) && !pass;
+    assign addr = lock `LOCK_ADDR;
+    assign rnotw = lock `LOCK_RW;
+    assign select = lock `LOCK_NUM;
+    assign wdata = (!select) ? cache0_wdata : cache1_wdata;
+    assign strobe = ((!select) ? cache0_strobe : cache1_strobe) && !pass;
+    always @(select or rdata) begin
         if(!select) begin
             cache0_rdata = rdata;
         end
@@ -1348,8 +1352,8 @@ module processor(halt, reset, disable_cache, clk);
     
     //caches for cores
     //module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request_status, lock, share_in, ins, acc0, acc1, r1, r2, rout1, rout2, stall, disable_cache, clk);
-    L1_cache c0_cache(cache0_1, cache0_addr, cache0_wdata, cache0_pass, cache0_rnotw, cache0_strobe, cache0_status, cache0_rdata, lock `LOCK, cache1_0, clk);
-    L1_cache c1_cache(cache1_0, cache1_addr, cache1_wdata, cache1_pass, cache1_rnotw, cache1_strobe, cache1_status, cache1_rdata, lock `LOCK, cache0_1, clk);
+    L1_cache c0_cache(cache0_1, cache0_addr, cache0_wdata, cache0_pass, cache0_rnotw, cache0_strobe, cache0_status, cache0_rdata, cache0_status, lock `LOCK, cache1_0, instruction_c1, acc0_val_c1, acc1_val_c1, r1_val_c1, r2_val_c1, mem_val1_c1, mem_val2_c1, cache_stall_flag_c1, disable_cache, clk);
+    L1_cache c1_cache(cache1_0, cache1_addr, cache1_wdata, cache1_pass, cache1_rnotw, cache1_strobe, cache1_status, cache1_rdata, cache1_status, lock `LOCK, cache0_1, instruction_c2, acc0_val_c2, acc1_val_c2, r1_val_c2, r2_val_c2, mem_val1_c2, mem_val2_c2, cache_stall_flag_c2, disable_cache, clk);
     
     priority_decider decider(lock `LOCK_VALUE, pass, cache0_status, cache1_status, {cache0_pass, 1'b0, cache0_rnotw, cache0_addr}, {cache1_pass, 1'b1, cache1_rnotw, cache1_addr}, lock `LOCK);
     
