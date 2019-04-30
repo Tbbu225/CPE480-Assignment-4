@@ -520,9 +520,6 @@ output reg `WORD ins_to_mem, acc0_mem_val, acc1_mem_val, r1_mem_val, r2_mem_val;
 input reset, clk, mem_stall;
 input `WORD mem_val1, mem_val2; 
 
-//L1 Cache
-reg `CACHElinesize cache `WORD;
-
 //stage 0 regs & memory
 reg `WORD pc, pc_inc, instruction;
 reg `WORD instruction_mem `MEMSIZE;
@@ -614,7 +611,7 @@ reg [2:0] NOPs, NOP_timer;
 
 integer i;
 always@(posedge reset) begin
-    for (i = 0; i < `REGNUM; i++) begin
+    for (i = 0; i < `NUMREG; i = i + 1) begin
         if(i == NUM_sp) begin
             regfile[i] = sp_start;
         end
@@ -771,7 +768,7 @@ always@(posedge clk) begin
     r1_mem_val <= r1_val;
     r2_mem_val <= r2_val;
     
-    case(ins_to_ALUMEM `Opcode1)
+    case(ins_to_ALUMEM `OPcode1)
         `OPlf: begin
             data1_to_ALU2 <= {`Float , mem_val1};
         end
@@ -781,8 +778,8 @@ always@(posedge clk) begin
         default data1_to_ALU2 <= 0;
     endcase
 
-    if(ins_to_ALUMEM `Opcode1 >= `OPjr) begin
-        case(ins_to_ALUMEM `Opcode1)
+    if(ins_to_ALUMEM `OPcode1 >= `OPjr) begin
+        case(ins_to_ALUMEM `OPcode1)
             `OPlf: begin
                 data2_to_ALU2 <= {`Float , mem_val2};
             end
@@ -988,12 +985,12 @@ endmodule
 `define CACHE_SHARE_DATA    [31:16]
 `define CACHE_SHARE_STROBE  [32]
 
-module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request_status, lock, share_in, ins, acc0, acc1, r1, r2, rout1, rout2, stall, disable, clk);
+module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request_status, lock, share_in, ins, acc0, acc1, r1, r2, rout1, rout2, stall, disable_cache, clk);
     output `CACHE_SHARE share_out; 
     output reg `LOCK_ADDR addr;
     output reg `LINE wdata, rout1, rout2;
     output pass, rnotw, strobe, stall;
-    input mfc, request_status, lock, clk;
+    input mfc, request_status, lock, disable_cache, clk;
     input `LINE rdata;
     input `CACHE_SHARE share_in;
 	input `WORD ins, acc0, acc1, r1, r2;
@@ -1021,12 +1018,12 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 			ins1pass <= 0;
 			if (ins`OPcode1 == `OPli || ins`OPcode1 == `OPlf) begin
 				for (i = 0; i < 16; i=i+1) begin
-					if (acc0 == cache[i]`CACHE_TAG && !disable)	begin 
+					if (acc0 == cache[i]`CACHE_TAG && !disable_cache)	begin 
 						rout1 <= cache[i]`CACHE_DATA;
 						incache <= 1;
 					end
 				end
-				if (!incache || disable) begin
+				if (!incache || disable_cache) begin
 					pass <= 0;
 					rnotw <= 1;
 					addr <= acc0; 
@@ -1043,10 +1040,10 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 					addr <= r1; 
 					wdata <= acc0; 
 					//send share_out to other cache
-					if (!disable) begin
+					if (!disable_cache) begin
 						share_out`CACHE_SHARE_ADDRESS <= addr;
 						share_out`CACHE_SHARE_DATA <= acc0;
-						share_out`STROBE <= 1;
+						share_out`CACHE_SHARE_STROBE <= 1;
 					end
 				end
 			end
@@ -1060,7 +1057,7 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 						pass <= 1;
 						ins1pass <= 1;
 						stall <= 0;
-						if (!disable) begin
+						if (!disable_cache) begin
 							//make new cache line using rdata
 							newcacheline`CACHE_VALID <= 1;
 							newcacheline`CACHE_TAG <= addr;
@@ -1092,10 +1089,10 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 						addr <= r1; 
 						wdata <= acc0; 
 						//send share_out to other cache
-						if (!disable begin)
+						if (!disable_cache) begin
 							share_out`CACHE_SHARE_ADDRESS <= addr;
 							share_out`CACHE_SHARE_DATA <= acc0;
-							share_out`STROBE <= 1;
+							share_out`CACHE_SHARE_STROBE <= 1;
 						end
 					end
 				end
@@ -1120,12 +1117,12 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 			if (pass) begin
 				if (ins`OPcode2 == `OPli || ins`OPcode2 == `OPlf) begin
 					for (i = 0; i < 16; i=i+1) begin
-						if (acc1 == cache[i]`CACHE_TAG && !disable)	begin 
+						if (acc1 == cache[i]`CACHE_TAG && !disable_cache)	begin 
 							rout2 <= cache[i]`CACHE_DATA;
 							incache <= 1;
 						end
 					end
-					if (!incache || disable) begin
+					if (!incache || disable_cache) begin
 						pass <= 0;
 						rnotw <= 1;
 						addr <= acc1; //not sure
@@ -1142,10 +1139,10 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 						addr <= r2; 
 						wdata <= acc1; 
 						//send share_out to other cache
-						if (!disable) begin
+						if (!disable_cache) begin
 							share_out`CACHE_SHARE_ADDRESS <= addr;
 							share_out`CACHE_SHARE_DATA <= acc1;
-							share_out`STROBE <= 1;
+							share_out`CACHE_SHARE_STROBE <= 1;
 						end
 					end
 				end
@@ -1156,7 +1153,7 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 						if (mfc) begin
 							pass <= 1;
 							stall <= 0;
-							if (!disable) begin
+							if (!disable_cache) begin
 								//make new cache line using rdata
 								newcacheline`CACHE_VALID <= 1;
 								newcacheline`CACHE_TAG <= addr;
@@ -1188,10 +1185,10 @@ module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request
 							addr <= r2; 
 							wdata <= acc1; 
 							//send share_out to other cache
-							if (!disable) begin
+							if (!disable_cache) begin
 								share_out`CACHE_SHARE_ADDRESS <= addr;
 								share_out`CACHE_SHARE_DATA <= acc1;
-								share_out`STROBE <= 1;
+								share_out`CACHE_SHARE_STROBE <= 1;
 							end
 						end
 					end
@@ -1295,11 +1292,11 @@ endmodule
 
 module processor(halt, reset, disable_cache, clk);
 
-    input reset, use_cache, clk;
+    input reset, disable_cache, clk;
     output halt;
     
     //lines for slowmem
-    reg `LINE rdata, wdata, 
+    reg `LINE rdata, wdata;
     reg `WORD addr;
     reg strobe, rnotw, mfc, select, pass;
     
@@ -1329,7 +1326,7 @@ module processor(halt, reset, disable_cache, clk);
     
     assign halt = halt1 && halt2;
     
-    slowmem64(mfc, rdata, addr `BLOCKADDR, wdata, rnotw, strobe, clk);
+    slowmem64 slowmem(mfc, rdata, addr `BLOCKADDR, wdata, rnotw, strobe, clk);
     
     //locked when instruction is a read instruction and the mfc has not been set yet
     assign lock `LOCK = !mfc && lock `LOCK_RW;
@@ -1350,6 +1347,7 @@ module processor(halt, reset, disable_cache, clk);
     end
     
     //caches for cores
+    //module L1_cache(share_out, addr, wdata, pass, rnotw, strobe, mfc, rdata, request_status, lock, share_in, ins, acc0, acc1, r1, r2, rout1, rout2, stall, disable_cache, clk);
     L1_cache c0_cache(cache0_1, cache0_addr, cache0_wdata, cache0_pass, cache0_rnotw, cache0_strobe, cache0_status, cache0_rdata, lock `LOCK, cache1_0, clk);
     L1_cache c1_cache(cache1_0, cache1_addr, cache1_wdata, cache1_pass, cache1_rnotw, cache1_strobe, cache1_status, cache1_rdata, lock `LOCK, cache0_1, clk);
     
@@ -1357,7 +1355,7 @@ module processor(halt, reset, disable_cache, clk);
     
     //module tacky_core(ins_to_mem, acc0_mem_val, acc1_mem_val, r1_mem_val, r2_mem_val, halt, reset, mem_stall, mem_val1, mem_val2, clk);
     tacky_core c1(instruction_c1, acc0_val_c1, acc1_val_c1, r1_val_c1, r2_val_c1, halt1, reset, cache_stall_flag_c1, mem_val1_c1, mem_val2_c1, clk);
-    tacky_core #(PC_start = 16'h8000, sp_start = 16'hbfff) c2(instruction_c2, acc0_val_c2, acc1_val_c2, r1_val_c2, r2_val_c2, halt2, reset, cache_stall_flag_c2, mem_val1_c2, mem_val2_c2, clk);
+    tacky_core #(.PC_start(16'h8000), .sp_start(16'hbfff)) c2(instruction_c2, acc0_val_c2, acc1_val_c2, r1_val_c2, r2_val_c2, halt2, reset, cache_stall_flag_c2, mem_val1_c2, mem_val2_c2, clk);
     
 endmodule
 
